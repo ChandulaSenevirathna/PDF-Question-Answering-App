@@ -1,0 +1,11 @@
+tiktoken
+langchain-community
+PyPDF2
+faiss-cpu
+transformers
+sentence-transformers
+langchain-huggingface
+streamlit
+torch
+torchvision
+torchaudio
