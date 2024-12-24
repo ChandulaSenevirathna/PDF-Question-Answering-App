@@ -5,12 +5,53 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from PyPDF2 import PdfReader
 from langchain.schema import Document
+import os
+from transformers.utils import default_cache_path
+import re
+import time
 
-# Step 1: Load Hugging Face model once
+llm_model_names = ["google/flan-t5-small", "google/flan-t5-large"]
+existing_llm_models = []
+
+embedding_model_names = ["sentence-transformers/paraphrase-MiniLM-L6-v2","sentence-transformers/all-MiniLM-L6-v2"]
+existing_embeding_models = []
+
+def find_models(cache_path=default_cache_path):
+    folder_names = os.listdir(cache_path)
+    
+    for model in llm_model_names:
+        
+        model = model.replace("/","--")
+        
+        for folder_name in folder_names:
+            if re.search(model, folder_name):
+                existing_llm_models.append(model)
+    
+    for model in embedding_model_names:
+        
+        model = model.replace("/","--")
+        
+        for folder_name in folder_names:
+            if re.search(model, folder_name):
+                existing_embeding_models.append(model)
+                
+
+def download_llm_model(model_name):
+    
+    AutoTokenizer.from_pretrained(model_name)
+    AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    
+def download_embedding_model(model_name):
+    
+    HuggingFaceEmbeddings(model_name=model_name)
+    
+    
+
+# Step 3: Load Hugging Face model once
 @st.cache_resource(show_spinner=False)
-def load_model():
-    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-large")
-    model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-large")
+def load_model(model_name):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     hf_pipeline = pipeline(
         "text2text-generation",
         model=model,
@@ -21,10 +62,9 @@ def load_model():
         do_sample=False
     )
     return hf_pipeline
+ 
 
-hf_pipeline = load_model()
-
-# Step 2: Load PDF and extract text
+# Step 4: Load PDF and extract text
 @st.cache_data(show_spinner=False)  # Suppress cache spinner
 def load_pdf(pdf_path):
     reader = PdfReader(pdf_path)
@@ -33,22 +73,23 @@ def load_pdf(pdf_path):
         text += page.extract_text()
     return text
 
-# Step 3: Split text into manageable chunks
+# Step 5: Split text into manageable chunks
 @st.cache_data(show_spinner=False)  
 def chunk_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
     return splitter.create_documents([text])
 
-# Step 4: Embed and index chunks
+# Step 6: Embed and index chunks
 @st.cache_data(show_spinner=False) 
-def create_vector_store(_docs):
+def create_vector_store(_docs, embedding_model_name):
     documents = [Document(page_content=doc.page_content) for doc in _docs]
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
     vector_store = FAISS.from_documents(documents, embeddings)
     return vector_store
 
-# Step 5: Answer questions using a free LLM
-def answer_question(vector_store, question):
+
+# Step 7: Answer questions using a free LLM
+def answer_question(vector_store, model_name, question):
 
     docs = vector_store.similarity_search(question, k=5)
     
@@ -65,38 +106,103 @@ def answer_question(vector_store, question):
     {context}
     """
     
+    hf_pipeline = load_model(model_name) 
+    
     result = hf_pipeline(refined_query)
     answer = result[0]['generated_text']
     return answer, docs
 
-# Streamlit App
-st.title("PDF Question-Answering App")
 
-# File uploader
-uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
 
-if uploaded_file is not None:
-    with st.spinner("Processing PDF..."):
-        
-        text = load_pdf(uploaded_file)
-        docs = chunk_text(text)
-        vector_store = create_vector_store(docs)
-        st.success("PDF processed successfully! You can now ask questions.")
+# Streamlit app   
+def main():
     
-    # user question input
-    question = st.text_input("Ask a question about the PDF content:")
     
-    if question:
-        with st.spinner("Searching for the answer..."):
-            answer, sources = answer_question(vector_store, question)
+    model_availability = {"LLM": False, "Embedding": False}
+    downloading = False
+    
+    find_models()
+    
+    # Set up sidebar
+    st.sidebar.title("Model Selection")
+    
+    
+    # choose LLM model
+    selected_llm_model_name = st.sidebar.selectbox("Choose or search the LLM model", llm_model_names)
+    
+    formated_llm_model_name = selected_llm_model_name.replace("/","--")
+    
+    if formated_llm_model_name in existing_llm_models:
+        st.sidebar.success(f"Model '{selected_llm_model_name}' is already available.")
+        model_availability["LLM"] = True
+    else:
+        st.sidebar.warning(f"Model '{selected_llm_model_name}' is not available.")    
         
-        # Display the answer
-        st.subheader("Answer")
-        st.write(answer)
+        if st.sidebar.button("Download LLM Model"):
+      
+                with st.spinner(f"Downloading {selected_llm_model_name} ..."):                   
+                    download_llm_model(selected_llm_model_name)
+                    model_availability["LLM"] = True
+                st.rerun()       
+
+    
+    # choose embedding model 
+    selected_embedding_model_name = st.sidebar.selectbox("Choose or search the embedding model", embedding_model_names)
+    
+    formated_embedding_model_name = selected_embedding_model_name.replace("/","--")
+    
+    if formated_embedding_model_name in existing_embeding_models:
+        st.sidebar.success(f"Model '{selected_embedding_model_name}' is already available.")
+        model_availability["Embedding"] = True
+    else:
+        st.sidebar.warning(f"Model '{selected_embedding_model_name}' is not available.")
         
-        # Display sources
-        if sources:
-            st.subheader("Relevant Sources")
-            for i, doc in enumerate(sources):
-                st.write(f"**Source {i + 1}:**")
-                st.write(f"{doc.page_content[:1000]}...")
+        if st.sidebar.button("Download Embedding Model"):
+               
+                with st.spinner(f"Downloading {selected_embedding_model_name} ..."):                   
+                    download_embedding_model(selected_embedding_model_name)
+                    model_availability["Embedding"] = True
+                st.rerun()      
+                   
+    # main body
+    
+    st.title("PDF Question-Answering App")
+    
+    if model_availability["LLM"] == True & model_availability["Embedding"] == True:
+    
+        # File uploader
+        uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
+        
+        if uploaded_file is not None:
+            with st.spinner("Processing PDF..."):
+                
+                text = load_pdf(uploaded_file)
+                docs = chunk_text(text)
+                vector_store = create_vector_store(docs, selected_embedding_model_name)
+                st.success("PDF processed successfully! You can now ask questions.")
+            
+            # user question input  
+            question = st.text_input("Ask a question about the PDF content:")
+
+            if question:
+                with st.spinner("Searching for the answer..."):
+                    answer, sources = answer_question(vector_store, selected_llm_model_name, question)
+                
+                # Display the answer
+                st.subheader("Answer")
+                st.write(answer)
+                
+                # Display sources
+                if sources:
+                    st.subheader("Relevant Sources")
+                    for i, doc in enumerate(sources):
+                        st.write(f"**Source {i + 1}:**")
+                        st.write(f"{doc.page_content[:1000]}...")
+    else:
+        st.warning("The required models are not available. Please download them to proceed.")
+    
+
+# Run the Streamlit app
+if __name__ == "__main__":
+    main()
+
