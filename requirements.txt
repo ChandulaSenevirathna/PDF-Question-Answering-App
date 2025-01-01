@@ -4,3 +4,4 @@ langchain-community
 langchain-huggingface
 transformers
 pypdf2
+spacy
