@@ -13,4 +13,4 @@ streamlit run app.py
 # Deployment
 
 The deployed application can be found at this URL:
-https://pdf-question-answering-app-6r7hlnsfzvlykm4eexmfna.streamlit.app/
+https://pdf-question-answering-app-6emshrkzh6zzu2vwwqstdy.streamlit.app/
