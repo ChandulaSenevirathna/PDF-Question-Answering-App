@@ -5,3 +5,4 @@ langchain-huggingface
 transformers
 pypdf2
 spacy
+faiss-cpu

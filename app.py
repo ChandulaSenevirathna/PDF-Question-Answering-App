@@ -142,7 +142,7 @@ def main():
             with st.spinner(f"Downloading {selected_llm_model_name} ..."):
                 download_llm_model(selected_llm_model_name)
                 model_availability["LLM"] = True
-            st.experimental_rerun()
+            st.rerun()
     
     # Choose embedding model 
     selected_embedding_model_name = st.sidebar.selectbox("Choose or search the embedding model", embedding_model_names)
@@ -157,7 +157,7 @@ def main():
             with st.spinner(f"Downloading {selected_embedding_model_name} ..."):
                 download_embedding_model(selected_embedding_model_name)
                 model_availability["Embedding"] = True
-            st.experimental_rerun()
+            st.rerun()
                    
     # Main body
     st.title("PDF Question-Answering App")
