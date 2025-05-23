@@ -17,7 +17,25 @@ existing_llm_models = []
 embedding_model_names = ["sentence-transformers/all-MiniLM-L6-v2"]
 existing_embeding_models = []
 
+# def find_models(cache_path=default_cache_path):
+#     folder_names = os.listdir(cache_path)
+    
+#     for model in llm_model_names:
+#         model = model.replace("/", "--")
+#         for folder_name in folder_names:
+#             if re.search(model, folder_name):
+#                 existing_llm_models.append(model)
+     
+#     for model in embedding_model_names:
+#         model = model.replace("/", "--")
+#         for folder_name in folder_names:
+#             if re.search(model, folder_name):
+#                 existing_embeding_models.append(model)
+
 def find_models(cache_path=default_cache_path):
+    if not os.path.exists(cache_path):
+        return  # Skip if cache path doesn't exist
+    
     folder_names = os.listdir(cache_path)
     
     for model in llm_model_names:
